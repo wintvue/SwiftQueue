@@ -44,13 +44,38 @@ func main() {
 			// Print what we received
 			fmt.Printf("Received: %s\n", string(buffer[:n]))
 
-			responseValue := int32(7) // 32-bit signed integer
-			responseBytes := make([]byte, 4)
-			binary.BigEndian.PutUint32(responseBytes, uint32(responseValue))
-			
+			// Kafka Response Message Structure:
+			// 1. message_size (4 bytes) - size of header + body
+			// 2. Header (response header v0) - correlation_id (4 bytes)
+			// 3. Body (empty for this stage)
 
-			fmt.Printf("Sending bytes: %v (hex: %x)\n", responseBytes, responseBytes)
-			
+			correlationID := int32(7) // Hard-coded correlation_id as required
+
+			// Header: response header v0 contains only correlation_id
+			headerSize := 4 // correlation_id is 4 bytes
+			bodySize := 0   // empty body for this stage
+
+			// message_size = header + body
+			messageSize := int32(headerSize + bodySize)
+
+			// Create complete response: message_size + header + body
+			totalResponseSize := 4 + headerSize + bodySize // 4 bytes for message_size + header + body
+			responseBytes := make([]byte, totalResponseSize)
+
+			// 1. Encode message_size (first 4 bytes)
+			binary.BigEndian.PutUint32(responseBytes[0:4], uint32(messageSize))
+
+			// 2. Encode header - correlation_id (next 4 bytes)
+			binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
+
+			// 3. Body is empty for this stage (no additional bytes to add)
+
+			fmt.Printf("Kafka Response Message:\n")
+			fmt.Printf("  message_size: %d bytes\n", messageSize)
+			fmt.Printf("  Header (correlation_id): %d\n", correlationID)
+			fmt.Printf("  Body: empty\n")
+			fmt.Printf("  Total response: %v (hex: %x)\n", responseBytes, responseBytes)
+
 			_, err = c.Write(responseBytes)
 
 			if err != nil {
@@ -58,7 +83,7 @@ func main() {
 				return
 			}
 
-			fmt.Printf("Response sent: %d\n", responseValue)
+			fmt.Printf("Response sent: %d\n", correlationID)
 			fmt.Println("Response sent to client!")
 		}(conn)
 	}
