@@ -12,7 +12,6 @@ var _ = net.Listen
 var _ = os.Exit
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
 
 	
@@ -41,37 +40,25 @@ func main() {
 				return
 			}
 
-			// Print what we received
 			fmt.Printf("Received: %s\n", string(buffer[:n]))
 
-			// Kafka Response Message Structure:
-			// 1. message_size (4 bytes) - size of header + body
-			// 2. Header (response header v0) - correlation_id (4 bytes)
-			// 3. Body (empty for this stage)
+			requestBytes := buffer[:n]
+			// request_api_key := int32(binary.BigEndian.Uint32(requestBytes[4:6]))
+			// request_api_version := int32(binary.BigEndian.Uint32(requestBytes[6:8]))
+			correlationID := int32(binary.BigEndian.Uint32(requestBytes[8:12]))
+			// client_id := string(binary.BigEndian.string(requestBytes[12:28]))
 
-			correlationID := int32(7) // Hard-coded correlation_id as required
+			headerSize := 4 
+			bodySize := 0   
+			messageSizeValue := int32(headerSize + bodySize)
 
-			// Header: response header v0 contains only correlation_id
-			headerSize := 4 // correlation_id is 4 bytes
-			bodySize := 0   // empty body for this stage
-
-			// message_size = header + body
-			messageSize := int32(headerSize + bodySize)
-
-			// Create complete response: message_size + header + body
-			totalResponseSize := 4 + headerSize + bodySize // 4 bytes for message_size + header + body
+			totalResponseSize := 4 + headerSize + bodySize 
 			responseBytes := make([]byte, totalResponseSize)
 
-			// 1. Encode message_size (first 4 bytes)
-			binary.BigEndian.PutUint32(responseBytes[0:4], uint32(messageSize))
-
-			// 2. Encode header - correlation_id (next 4 bytes)
+			binary.BigEndian.PutUint32(responseBytes[0:4], uint32(messageSizeValue))
 			binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
 
-			// 3. Body is empty for this stage (no additional bytes to add)
-
-			fmt.Printf("Kafka Response Message:\n")
-			fmt.Printf("  message_size: %d bytes\n", messageSize)
+			fmt.Printf("  message_size: %d bytes\n", messageSizeValue)
 			fmt.Printf("  Header (correlation_id): %d\n", correlationID)
 			fmt.Printf("  Body: empty\n")
 			fmt.Printf("  Total response: %v (hex: %x)\n", responseBytes, responseBytes)
