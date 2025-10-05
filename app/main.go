@@ -59,7 +59,7 @@ func main() {
 			binary.BigEndian.PutUint32(responseBytes[0:4], uint32(messageSizeValue))
 			binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
 
-			if request_api_version == 18 {
+			if request_api_version == 4 {
 				binary.BigEndian.PutUint16(responseBytes[8:10], uint16(0))
 			} else {
 				binary.BigEndian.PutUint16(responseBytes[8:10], uint16(35))
