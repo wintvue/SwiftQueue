@@ -65,7 +65,7 @@ func buildApiVersionsArray(buffer []byte) {
 
 	binary.BigEndian.PutUint16(buffer[offset:offset+2], uint16(18))  // api_key
 	binary.BigEndian.PutUint16(buffer[offset+2:offset+4], uint16(0)) // min_version
-	binary.BigEndian.PutUint16(buffer[offset+4:offset+6], uint16(5)) // max_version
+	binary.BigEndian.PutUint16(buffer[offset+4:offset+6], uint16(4)) // max_version
 	buffer[offset+6] = uint8(0)                                      // tag_buffer
 	offset += 7
 
