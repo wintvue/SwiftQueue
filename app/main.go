@@ -43,15 +43,15 @@ func main() {
 			fmt.Printf("Received: %s\n", string(buffer[:n]))
 
 			requestBytes := buffer[:n]
-			// request_api_key := int32(binary.BigEndian.Uint32(requestBytes[4:6]))
-			request_api_version := int16(binary.BigEndian.Uint16(requestBytes[6:8]))
+			// request_api_version := int16(binary.BigEndian.Uint16(requestBytes[6:8]))
 			correlationID := int32(binary.BigEndian.Uint32(requestBytes[8:12]))
-			// client_id := string(binary.BigEndian.string(requestBytes[12:28]))
 
 			headerSize := 4 
-			bodySize := 0
-			response_api_version_size := 2   
-			messageSizeValue := int32(headerSize + bodySize + response_api_version_size)
+			error_code_size := 2   
+			api_version_array_size := 22
+			throttle_time_size := 4
+			tag_buffer_size := 1
+			messageSizeValue := int32(headerSize + error_code_size + api_version_array_size + throttle_time_size + tag_buffer_size)
 			totalResponseSize := 4 + messageSizeValue 
 
 			responseBytes := make([]byte, totalResponseSize)
@@ -59,11 +59,36 @@ func main() {
 			binary.BigEndian.PutUint32(responseBytes[0:4], uint32(messageSizeValue))
 			binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
 
-			if request_api_version == 4 {
+			// if request_api_version == 4 {
 				binary.BigEndian.PutUint16(responseBytes[8:10], uint16(0))
-			} else {
-				binary.BigEndian.PutUint16(responseBytes[8:10], uint16(35))
-			}
+			// } else {
+			// 	binary.BigEndian.PutUint16(responseBytes[8:10], uint16(35))
+			// }
+
+			responseBytes[10] = uint8(4)
+			// binary.BigEndian.PutUint8(responseBytes[10:11], uint8(4))
+			binary.BigEndian.PutUint16(responseBytes[11:13], uint16(1))
+			binary.BigEndian.PutUint16(responseBytes[13:15], uint16(0))
+			binary.BigEndian.PutUint16(responseBytes[15:17], uint16(17))
+			responseBytes[17] = uint8(0)
+			// binary.BigEndian.PutUint8(responseBytes[17:18], uint8(0))
+
+			binary.BigEndian.PutUint16(responseBytes[18:20], uint16(18))
+			binary.BigEndian.PutUint16(responseBytes[20:22], uint16(0))
+			binary.BigEndian.PutUint16(responseBytes[22:24], uint16(4))
+			responseBytes[24] = uint8(0)
+			// binary.BigEndian.PutUint8(responseBytes[24:25], uint8(0))
+
+			binary.BigEndian.PutUint16(responseBytes[25:27], uint16(75))
+			binary.BigEndian.PutUint16(responseBytes[27:29], uint16(0))
+			binary.BigEndian.PutUint16(responseBytes[29:31], uint16(0))
+			responseBytes[31] = uint8(0)
+			// binary.BigEndian.PutUint8(responseBytes[31:32], uint8(0))
+
+			binary.BigEndian.PutUint32(responseBytes[32:36], uint32(0))
+			responseBytes[36] = uint8(0)
+			// binary.BigEndian.PutUint8(responseBytes[36:37], uint8(0))
+
 
 			fmt.Printf("  message_size: %d bytes\n", messageSizeValue)
 			fmt.Printf("  Header (correlation_id): %d\n", correlationID)
