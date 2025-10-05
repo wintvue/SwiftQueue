@@ -100,7 +100,7 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			continue
 		}
-		defer conn.Close()
+		// defer conn.Close()
 
 		// Handle each connection in a goroutine for concurrent connections
 		// go func(c net.Conn) {
@@ -141,5 +141,6 @@ func main() {
 		fmt.Printf("Response sent: %d\n", correlationID)
 		fmt.Println("Response sent to client!")
 		// }(conn)
+		conn.Close()
 	}
 }
