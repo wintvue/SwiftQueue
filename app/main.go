@@ -95,47 +95,51 @@ func main() {
 
 	for {
 		conn, err := l.Accept()
+
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 			continue
 		}
+		defer conn.Close()
 
 		// Handle each connection in a goroutine for concurrent connections
-		go func(c net.Conn) {
-			defer c.Close()
-			fmt.Println("Client connected!")
+		// go func(c net.Conn) {
+		// 	defer c.Close()
+		fmt.Println("Client connected!")
 
-			// Read request from client
-			buffer := make([]byte, 1024)
-			n, err := c.Read(buffer)
-			if err != nil {
-				fmt.Println("Error reading from connection:", err.Error())
-				return
-			}
+		// Read request from client
+		buffer := make([]byte, 1024)
+		// n, err := c.Read(buffer)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error reading from connection:", err.Error())
+			return
+		}
 
-			fmt.Printf("Received: %s\n", string(buffer[:n]))
+		fmt.Printf("Received: %s\n", string(buffer[:n]))
 
-			// Parse the Kafka request
-			correlationID, apiVersion := parseKafkaRequest(buffer[:n])
+		// Parse the Kafka request
+		correlationID, apiVersion := parseKafkaRequest(buffer[:n])
 
-			// Build the response
-			responseBytes := buildApiVersionsResponse(correlationID, apiVersion)
+		// Build the response
+		responseBytes := buildApiVersionsResponse(correlationID, apiVersion)
 
-			// Debug output
-			fmt.Printf("  message_size: %d bytes\n", len(responseBytes)-4)
-			fmt.Printf("  Header (correlation_id): %d\n", correlationID)
-			fmt.Printf("  API Version: %d\n", apiVersion)
-			fmt.Printf("  Total response: %v (hex: %x)\n", responseBytes, responseBytes)
+		// Debug output
+		fmt.Printf("  message_size: %d bytes\n", len(responseBytes)-4)
+		fmt.Printf("  Header (correlation_id): %d\n", correlationID)
+		fmt.Printf("  API Version: %d\n", apiVersion)
+		fmt.Printf("  Total response: %v (hex: %x)\n", responseBytes, responseBytes)
 
-			// Send response
-			_, err = c.Write(responseBytes)
-			if err != nil {
-				fmt.Println("Error writing response:", err.Error())
-				return
-			}
+		// Send response
+		// _, err = c.Write(responseBytes)
+		_, err = conn.Write(responseBytes)
+		if err != nil {
+			fmt.Println("Error writing response:", err.Error())
+			return
+		}
 
-			fmt.Printf("Response sent: %d\n", correlationID)
-			fmt.Println("Response sent to client!")
-		}(conn)
+		fmt.Printf("Response sent: %d\n", correlationID)
+		fmt.Println("Response sent to client!")
+		// }(conn)
 	}
 }
