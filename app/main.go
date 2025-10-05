@@ -43,7 +43,7 @@ func main() {
 			fmt.Printf("Received: %s\n", string(buffer[:n]))
 
 			requestBytes := buffer[:n]
-			// request_api_version := int16(binary.BigEndian.Uint16(requestBytes[6:8]))
+			request_api_version := int16(binary.BigEndian.Uint16(requestBytes[6:8]))
 			correlationID := int32(binary.BigEndian.Uint32(requestBytes[8:12]))
 
 			headerSize := 4 
@@ -59,7 +59,7 @@ func main() {
 			binary.BigEndian.PutUint32(responseBytes[0:4], uint32(messageSizeValue))
 			binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
 
-			if request_api_version == 4 {
+			if request_api_version == 18 {
 				binary.BigEndian.PutUint16(responseBytes[8:10], uint16(0))
 			} else {
 				binary.BigEndian.PutUint16(responseBytes[8:10], uint16(35))
