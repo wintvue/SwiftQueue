@@ -44,19 +44,26 @@ func main() {
 
 			requestBytes := buffer[:n]
 			// request_api_key := int32(binary.BigEndian.Uint32(requestBytes[4:6]))
-			// request_api_version := int32(binary.BigEndian.Uint32(requestBytes[6:8]))
+			request_api_version := int16(binary.BigEndian.Uint16(requestBytes[6:8]))
 			correlationID := int32(binary.BigEndian.Uint32(requestBytes[8:12]))
 			// client_id := string(binary.BigEndian.string(requestBytes[12:28]))
 
 			headerSize := 4 
-			bodySize := 0   
-			messageSizeValue := int32(headerSize + bodySize)
+			bodySize := 0
+			response_api_version_size := 2   
+			messageSizeValue := int32(headerSize + bodySize + response_api_version_size)
+			totalResponseSize := 4 + messageSizeValue 
 
-			totalResponseSize := 4 + headerSize + bodySize 
 			responseBytes := make([]byte, totalResponseSize)
 
 			binary.BigEndian.PutUint32(responseBytes[0:4], uint32(messageSizeValue))
 			binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
+
+			if request_api_version == 4 {
+				binary.BigEndian.PutUint16(responseBytes[8:10], uint16(0))
+			} else {
+				binary.BigEndian.PutUint16(responseBytes[8:10], uint16(35))
+			}
 
 			fmt.Printf("  message_size: %d bytes\n", messageSizeValue)
 			fmt.Printf("  Header (correlation_id): %d\n", correlationID)
