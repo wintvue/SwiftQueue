@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"os"
 )
@@ -100,7 +102,7 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			continue
 		}
-		// defer conn.Close()
+		defer conn.Close()
 
 		// Handle each connection in a goroutine for concurrent connections
 		// go func(c net.Conn) {
@@ -112,8 +114,11 @@ func main() {
 		// n, err := c.Read(buffer)
 		n, err := conn.Read(buffer)
 		if err != nil {
-			fmt.Println("Error reading from connection:", err.Error())
-			return
+			if err == io.EOF {
+				log.Printf("Client closed connection: %s", "peer")
+			} else {
+				fmt.Println("Error reading from connection:", err.Error())
+			}
 		}
 
 		fmt.Printf("Received: %s\n", string(buffer[:n]))
@@ -135,7 +140,6 @@ func main() {
 		_, err = conn.Write(responseBytes)
 		if err != nil {
 			fmt.Println("Error writing response:", err.Error())
-			return
 		}
 
 		fmt.Printf("Response sent: %d\n", correlationID)
