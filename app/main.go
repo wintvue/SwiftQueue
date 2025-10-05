@@ -102,7 +102,6 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			continue
 		}
-		defer conn.Close()
 
 		// Handle each connection in a goroutine for concurrent connections
 		// go func(c net.Conn) {
@@ -119,6 +118,8 @@ func main() {
 			} else {
 				fmt.Println("Error reading from connection:", err.Error())
 			}
+			conn.Close()
+			continue
 		}
 
 		fmt.Printf("Received: %s\n", string(buffer[:n]))
