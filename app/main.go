@@ -146,6 +146,6 @@ func main() {
 		fmt.Printf("Response sent: %d\n", correlationID)
 		fmt.Println("Response sent to client!")
 		// }(conn)
-		conn.Close()
+		// conn.Close()
 	}
 }
