@@ -30,7 +30,7 @@ func buildApiVersionsResponse(correlationID int32, apiVersion int16) []byte {
 	binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
 
 	// 3. Body - Error code (2 bytes)
-	if apiVersion == 4 {
+	if apiVersion >= 0 && apiVersion <= 4 {
 		binary.BigEndian.PutUint16(responseBytes[8:10], uint16(0)) // NO_ERROR
 	} else {
 		binary.BigEndian.PutUint16(responseBytes[8:10], uint16(35)) // UNSUPPORTED_VERSION
