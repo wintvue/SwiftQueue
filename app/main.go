@@ -95,63 +95,64 @@ func main() {
 		os.Exit(1)
 	}
 
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-	}
-	defer conn.Close()
+	// conn, err := l.Accept()
+	// if err != nil {
+	// 	fmt.Println("Error accepting connection: ", err.Error())
+	// }
+	// defer conn.Close()
 
 	for {
-		// conn, err := l.Accept()
+		conn, err := l.Accept()
 
-		// if err != nil {
-		// 	fmt.Println("Error accepting connection: ", err.Error())
-		// 	continue
-		// }
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			continue
+		}
 
 		// Handle each connection in a goroutine for concurrent connections
-		// go func(c net.Conn) {
-		// 	defer c.Close()
-		fmt.Println("Client connected!")
+		go func(c net.Conn) {
+			defer c.Close()
+			fmt.Println("Client connected!")
 
-		// Read request from client
-		buffer := make([]byte, 1024)
-		// n, err := c.Read(buffer)
-		n, err := conn.Read(buffer)
-		if err != nil {
-			if err == io.EOF {
-				log.Printf("Client closed connection: %s", "peer")
-			} else {
-				fmt.Println("Error reading from connection:", err.Error())
+			for {
+				// Read request from client
+				buffer := make([]byte, 1024)
+				// n, err := c.Read(buffer)
+				n, err := c.Read(buffer)
+				if err != nil {
+					if err == io.EOF {
+						log.Printf("Client closed connection: %s", "peer")
+					} else {
+						fmt.Println("Error reading from connection:", err.Error())
+					}
+					c.Close()
+					break
+				}
+
+				fmt.Printf("Received: %s\n", string(buffer[:n]))
+
+				// Parse the Kafka request
+				correlationID, apiVersion := parseKafkaRequest(buffer[:n])
+
+				// Build the response
+				responseBytes := buildApiVersionsResponse(correlationID, apiVersion)
+
+				// Debug output
+				fmt.Printf("  message_size: %d bytes\n", len(responseBytes)-4)
+				fmt.Printf("  Header (correlation_id): %d\n", correlationID)
+				fmt.Printf("  API Version: %d\n", apiVersion)
+				fmt.Printf("  Total response: %v (hex: %x)\n", responseBytes, responseBytes)
+
+				// Send response
+				// _, err = c.Write(responseBytes)
+				_, err = c.Write(responseBytes)
+				if err != nil {
+					fmt.Println("Error writing response:", err.Error())
+				}
+
+				fmt.Printf("Response sent: %d\n", correlationID)
+				fmt.Println("Response sent to client!")
 			}
-			conn.Close()
-			break
-		}
-
-		fmt.Printf("Received: %s\n", string(buffer[:n]))
-
-		// Parse the Kafka request
-		correlationID, apiVersion := parseKafkaRequest(buffer[:n])
-
-		// Build the response
-		responseBytes := buildApiVersionsResponse(correlationID, apiVersion)
-
-		// Debug output
-		fmt.Printf("  message_size: %d bytes\n", len(responseBytes)-4)
-		fmt.Printf("  Header (correlation_id): %d\n", correlationID)
-		fmt.Printf("  API Version: %d\n", apiVersion)
-		fmt.Printf("  Total response: %v (hex: %x)\n", responseBytes, responseBytes)
-
-		// Send response
-		// _, err = c.Write(responseBytes)
-		_, err = conn.Write(responseBytes)
-		if err != nil {
-			fmt.Println("Error writing response:", err.Error())
-		}
-
-		fmt.Printf("Response sent: %d\n", correlationID)
-		fmt.Println("Response sent to client!")
-		// }(conn)
-		// conn.Close()
+		}(conn)
 	}
 }
