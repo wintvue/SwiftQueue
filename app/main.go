@@ -70,7 +70,7 @@ func parseKafkaRequest(requestBytes []byte) (correlationID int32, apiVersion int
 	if len(requestBytes) >= 12 {
 		apiVersion = int16(binary.BigEndian.Uint16(requestBytes[6:8]))
 		correlationID = int32(binary.BigEndian.Uint32(requestBytes[8:12]))
-		topicName = string(requestBytes[26:28])
+		topicName = string(requestBytes[26:29])
 
 	}
 
