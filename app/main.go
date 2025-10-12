@@ -14,75 +14,60 @@ var _ = net.Listen
 var _ = os.Exit
 
 // buildApiVersionsResponse creates a Kafka ApiVersions response
-func buildApiVersionsResponse(correlationID int32, apiVersion int16) []byte {
-	headerSize := 4
-	errorCodeSize := 2
-	apiVersionArraySize := 22
-	throttleTimeSize := 4
-	tagBufferSize := 1
-	messageSizeValue := int32(headerSize + errorCodeSize + apiVersionArraySize + throttleTimeSize + tagBufferSize)
-	totalResponseSize := 4 + messageSizeValue
+func buildApiVersionsResponse(correlationID int32, apiVersion int16, topicName string) []byte {
+	totalResponseSize := 45
 
 	responseBytes := make([]byte, totalResponseSize)
 
 	// 1. Message size (4 bytes)
-	binary.BigEndian.PutUint32(responseBytes[0:4], uint32(messageSizeValue))
+	binary.BigEndian.PutUint32(responseBytes[0:4], uint32(41))
 
 	// 2. Header - Correlation ID (4 bytes)
 	binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
 
+	responseBytes[8] = uint8(0)
+	binary.BigEndian.PutUint32(responseBytes[9:13], uint32(0))
+	responseBytes[13] = uint8(2)
+
 	// 3. Body - Error code (2 bytes)
-	if apiVersion >= 0 && apiVersion <= 4 {
-		binary.BigEndian.PutUint16(responseBytes[8:10], uint16(0)) // NO_ERROR
-	} else {
-		binary.BigEndian.PutUint16(responseBytes[8:10], uint16(35)) // UNSUPPORTED_VERSION
-	}
-
-	// 4. API versions array
-	buildApiVersionsArray(responseBytes[10:])
-
-	// 5. Throttle time (4 bytes) - set to 0
-	binary.BigEndian.PutUint32(responseBytes[32:36], uint32(0))
-
-	// 6. Tag buffer (1 byte) - empty
-	responseBytes[36] = uint8(0)
+	binary.BigEndian.PutUint16(responseBytes[14:16], uint16(3))
+	buildTopicResponse(responseBytes[16:], topicName)
 
 	return responseBytes
 }
 
-// buildApiVersionsArray builds the supported API versions array
-func buildApiVersionsArray(buffer []byte) {
+// buildTopicResponse builds the supported API versions array
+func buildTopicResponse(responseBytes []byte, topicName string) {
 	offset := 0
 
 	// Array length: 4 (compact array, so +1)
-	buffer[offset] = uint8(4)
+	responseBytes[offset] = uint8(4)
 	offset++
 
 	// API 1: ApiVersions (key=18, min=0, max=4)
-	binary.BigEndian.PutUint16(buffer[offset:offset+2], uint16(1))    // api_key
-	binary.BigEndian.PutUint16(buffer[offset+2:offset+4], uint16(0))  // min_version
-	binary.BigEndian.PutUint16(buffer[offset+4:offset+6], uint16(17)) // max_version
-	buffer[offset+6] = uint8(0)                                       // tag_buffer
-	offset += 7
+	topicNameBytes := []byte(topicName)
+	copy(responseBytes[offset:offset+3], topicNameBytes)
+	offset += 3
 
-	binary.BigEndian.PutUint16(buffer[offset:offset+2], uint16(18))  // api_key
-	binary.BigEndian.PutUint16(buffer[offset+2:offset+4], uint16(0)) // min_version
-	binary.BigEndian.PutUint16(buffer[offset+4:offset+6], uint16(4)) // max_version
-	buffer[offset+6] = uint8(0)                                      // tag_buffer
-	offset += 7
-
-	binary.BigEndian.PutUint16(buffer[offset:offset+2], uint16(75))  // api_key
-	binary.BigEndian.PutUint16(buffer[offset+2:offset+4], uint16(0)) // min_version
-	binary.BigEndian.PutUint16(buffer[offset+4:offset+6], uint16(0)) // max_version
-	buffer[offset+6] = uint8(0)                                      // tag_buffer
+	copy(responseBytes[offset:offset+16], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+	offset += 16
+	responseBytes[offset] = uint8(0)
+	offset++
+	responseBytes[offset] = uint8(1)
+	offset++
+	copy(responseBytes[offset:offset+4], []byte{0, 0, uint8(13), uint8(248)})
+	copy(responseBytes[offset+4:offset+7], []byte{0, uint8(255), 0})
 }
 
 // parseKafkaRequest extracts correlation ID and API version from request
-func parseKafkaRequest(requestBytes []byte) (correlationID int32, apiVersion int16) {
+func parseKafkaRequest(requestBytes []byte) (correlationID int32, apiVersion int16, topicName string) {
 	if len(requestBytes) >= 12 {
 		apiVersion = int16(binary.BigEndian.Uint16(requestBytes[6:8]))
 		correlationID = int32(binary.BigEndian.Uint32(requestBytes[8:12]))
+		topicName = string(requestBytes[26:28])
+
 	}
+
 	return
 }
 
@@ -117,7 +102,6 @@ func main() {
 			for {
 				// Read request from client
 				buffer := make([]byte, 1024)
-				// n, err := c.Read(buffer)
 				n, err := c.Read(buffer)
 				if err != nil {
 					if err == io.EOF {
@@ -132,10 +116,10 @@ func main() {
 				fmt.Printf("Received: %s\n", string(buffer[:n]))
 
 				// Parse the Kafka request
-				correlationID, apiVersion := parseKafkaRequest(buffer[:n])
+				correlationID, apiVersion, topicName := parseKafkaRequest(buffer[:n])
 
 				// Build the response
-				responseBytes := buildApiVersionsResponse(correlationID, apiVersion)
+				responseBytes := buildApiVersionsResponse(correlationID, apiVersion, topicName)
 
 				// Debug output
 				fmt.Printf("  message_size: %d bytes\n", len(responseBytes)-4)
