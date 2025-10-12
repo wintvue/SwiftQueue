@@ -30,11 +30,12 @@ func buildApiVersionsResponse(correlationID int32, apiVersion int16, topicName s
 	responseBytes[13] = uint8(2)
 
 	// 3. Body - Error code (2 bytes)
-	if topicName == "foo" {
-		binary.BigEndian.PutUint16(responseBytes[14:16], uint16(3))
-	} else {
-		binary.BigEndian.PutUint16(responseBytes[14:16], uint16(0))
-	}
+	// if topicName == "foo" {
+	// 	binary.BigEndian.PutUint16(responseBytes[14:16], uint16(3))
+	// } else {
+	// 	binary.BigEndian.PutUint16(responseBytes[14:16], uint16(0))
+	// }
+	binary.BigEndian.PutUint16(responseBytes[14:16], uint16(3))
 
 	buildTopicResponse(responseBytes[16:], topicName)
 
