@@ -14,8 +14,8 @@ var _ = net.Listen
 var _ = os.Exit
 
 // buildApiVersionsResponse creates a Kafka ApiVersions response
-func buildApiVersionsResponse(correlationID int32, apiVersion int16, topicName string) []byte {
-	totalResponseSize := 45
+func buildApiVersionsResponse(correlationID int32, apiVersion int16, arrayLength int, contentLength int16, content string, topicLength int, topicName string) []byte {
+	totalResponseSize := 100
 
 	responseBytes := make([]byte, totalResponseSize)
 
@@ -27,7 +27,7 @@ func buildApiVersionsResponse(correlationID int32, apiVersion int16, topicName s
 
 	responseBytes[8] = uint8(0)
 	binary.BigEndian.PutUint32(responseBytes[9:13], uint32(0))
-	responseBytes[13] = uint8(2)
+	responseBytes[13] = uint8(arrayLength)
 
 	// 3. Body - Error code (2 bytes)
 	// if topicName == "foo" {
@@ -37,23 +37,24 @@ func buildApiVersionsResponse(correlationID int32, apiVersion int16, topicName s
 	// }
 	binary.BigEndian.PutUint16(responseBytes[14:16], uint16(3))
 
-	buildTopicResponse(responseBytes[16:], topicName)
+	buildTopicResponse(responseBytes[16:], topicLength, topicName)
 
 	return responseBytes
 }
 
 // buildTopicResponse builds the supported API versions array
-func buildTopicResponse(responseBytes []byte, topicName string) {
+func buildTopicResponse(responseBytes []byte, topicLength int, topicName string) {
 	offset := 0
 
 	// Array length: 4 (compact array, so +1)
-	responseBytes[offset] = uint8(4)
+	responseBytes[offset] = byte(topicLength)
 	offset++
 
 	// API 1: ApiVersions (key=18, min=0, max=4)
 	topicNameBytes := []byte(topicName)
-	copy(responseBytes[offset:offset+3], topicNameBytes)
-	offset += 3
+	fmt.Println("topicNameBytes", topicLength)
+	copy(responseBytes[offset:offset+topicLength-1], topicNameBytes)
+	offset += topicLength - 1
 
 	copy(responseBytes[offset:offset+16], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
 	offset += 16
@@ -66,12 +67,30 @@ func buildTopicResponse(responseBytes []byte, topicName string) {
 }
 
 // parseKafkaRequest extracts correlation ID and API version from request
-func parseKafkaRequest(requestBytes []byte) (correlationID int32, apiVersion int16, topicName string) {
-	if len(requestBytes) >= 12 {
-		apiVersion = int16(binary.BigEndian.Uint16(requestBytes[6:8]))
-		correlationID = int32(binary.BigEndian.Uint32(requestBytes[8:12]))
-		topicName = string(requestBytes[26:29])
+func parseKafkaRequest(requestBytes []byte) (correlationID int32, apiVersion int16, contentLength int16, content string, arrayLength int, topicLength int, topicName string) {
+	if len(requestBytes) >= 6 {
+		offset := 6
 
+		apiVersion = int16(binary.BigEndian.Uint16(requestBytes[offset : offset+2]))
+		offset += 2
+
+		correlationID = int32(binary.BigEndian.Uint32(requestBytes[offset : offset+4]))
+		offset += 4
+
+		contentLength = int16(binary.BigEndian.Uint16(requestBytes[offset : offset+2]))
+		offset += 2
+
+		content = string(requestBytes[offset : offset+int(contentLength)])
+		offset += int(contentLength)
+
+		arrayLength = int(requestBytes[offset+1])
+		offset += 2
+
+		topicLength = int(requestBytes[offset])
+		offset++
+
+		topicName = string(requestBytes[offset : offset+topicLength-1])
+		offset += topicLength - 1
 	}
 
 	return
@@ -122,10 +141,10 @@ func main() {
 				fmt.Printf("Received: %s\n", string(buffer[:n]))
 
 				// Parse the Kafka request
-				correlationID, apiVersion, topicName := parseKafkaRequest(buffer[:n])
+				correlationID, apiVersion, contentLength, content, arrayLength, topicLength, topicName := parseKafkaRequest(buffer[:n])
 
 				// Build the response
-				responseBytes := buildApiVersionsResponse(correlationID, apiVersion, topicName)
+				responseBytes := buildApiVersionsResponse(correlationID, apiVersion, arrayLength, contentLength, content, topicLength, topicName)
 
 				// Debug output
 				fmt.Printf("  message_size: %d bytes\n", len(responseBytes)-4)
