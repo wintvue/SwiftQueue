@@ -13,85 +13,76 @@ import (
 var _ = net.Listen
 var _ = os.Exit
 
-// buildApiVersionsResponse creates a Kafka ApiVersions response
-func buildApiVersionsResponse(correlationID int32, apiVersion int16, arrayLength int, contentLength int16, content string, topicLength int, topicName string) []byte {
-	totalResponseSize := 100
+// buildResponse creates a Kafka ApiVersions response
+func buildResponse(requestBytes []byte, requestOffset int, correlationID int32, apiVersion int16, topicArrayLength int, contentLength int16, content string) []byte {
+	responseBytes := make([]byte, 14)
 
-	responseBytes := make([]byte, totalResponseSize)
-
-	// 1. Message size (4 bytes)
-	binary.BigEndian.PutUint32(responseBytes[0:4], uint32(41))
-
-	// 2. Header - Correlation ID (4 bytes)
+	// 1. Header - Correlation ID (4 bytes)
 	binary.BigEndian.PutUint32(responseBytes[4:8], uint32(correlationID))
 
+	// 2. Tag Buffer
 	responseBytes[8] = uint8(0)
+
+	// 3. Throttle time
 	binary.BigEndian.PutUint32(responseBytes[9:13], uint32(0))
-	responseBytes[13] = uint8(arrayLength)
 
-	// 3. Body - Error code (2 bytes)
-	// if topicName == "foo" {
-	// 	binary.BigEndian.PutUint16(responseBytes[14:16], uint16(3))
-	// } else {
-	// 	binary.BigEndian.PutUint16(responseBytes[14:16], uint16(0))
-	// }
-	binary.BigEndian.PutUint16(responseBytes[14:16], uint16(3))
+	// 4. Topic Array Length
+	responseBytes[13] = uint8(topicArrayLength)
 
-	buildTopicResponse(responseBytes[16:], topicLength, topicName)
+	// 5. Topic Array
+	responseBytes = buildTopicResponse(requestBytes, requestOffset, topicArrayLength, responseBytes)
+
+	// 6. Topic Authorized Response
+	responseBytes = append(responseBytes, []byte{0, 0, uint8(13), uint8(248)}...)
+
+	// 7. Tag Buffer
+	responseBytes = append(responseBytes, []byte{0, uint8(255), 0}...)
+
+	// 8. Message size (4 bytes)
+	binary.BigEndian.PutUint32(responseBytes[0:4], uint32(len(responseBytes)-4))
 
 	return responseBytes
 }
 
 // buildTopicResponse builds the supported API versions array
-func buildTopicResponse(responseBytes []byte, topicLength int, topicName string) {
-	offset := 0
+func buildTopicResponse(requestBytes []byte, requestOffset int, topicArrayLength int, responseBytes []byte) []byte {
+	for i := 0; i < topicArrayLength-1; i++ {
+		errorCode := 3
 
-	// Array length: 4 (compact array, so +1)
-	responseBytes[offset] = byte(topicLength)
-	offset++
+		topicNameLength := int(requestBytes[requestOffset])
+		requestOffset++
+		topicName := requestBytes[requestOffset : requestOffset+topicNameLength-1]
 
-	// API 1: ApiVersions (key=18, min=0, max=4)
-	topicNameBytes := []byte(topicName)
-	fmt.Println("topicNameBytes", topicLength)
-	copy(responseBytes[offset:offset+topicLength-1], topicNameBytes)
-	offset += topicLength - 1
+		requestOffset += topicNameLength - 1
+		requestOffset++
 
-	copy(responseBytes[offset:offset+16], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
-	offset += 16
-	responseBytes[offset] = uint8(0)
-	offset++
-	responseBytes[offset] = uint8(1)
-	offset++
-	copy(responseBytes[offset:offset+4], []byte{0, 0, uint8(13), uint8(248)})
-	copy(responseBytes[offset+4:offset+7], []byte{0, uint8(255), 0})
+		responseBytes = append(responseBytes, append([]byte{0, byte(errorCode), byte(topicNameLength)}, topicName...)...)
+		responseBytes = append(responseBytes, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}...)
+		responseBytes = append(responseBytes, uint8(0))
+		responseBytes = append(responseBytes, uint8(1))
+	}
+	return responseBytes
 }
 
-// parseKafkaRequest extracts correlation ID and API version from request
-func parseKafkaRequest(requestBytes []byte) (correlationID int32, apiVersion int16, contentLength int16, content string, arrayLength int, topicLength int, topicName string) {
-	if len(requestBytes) >= 6 {
-		offset := 6
+// parseQueueRequest extracts correlation ID and API version from request
+func parseQueueRequest(requestBytes []byte) (correlationID int32, apiVersion int16, contentLength int16, content string, topicArrayLength int, requestOffset int) {
+	requestOffset = 6
 
-		apiVersion = int16(binary.BigEndian.Uint16(requestBytes[offset : offset+2]))
-		offset += 2
+	apiVersion = int16(binary.BigEndian.Uint16(requestBytes[requestOffset : requestOffset+2]))
+	requestOffset += 2
 
-		correlationID = int32(binary.BigEndian.Uint32(requestBytes[offset : offset+4]))
-		offset += 4
+	correlationID = int32(binary.BigEndian.Uint32(requestBytes[requestOffset : requestOffset+4]))
+	requestOffset += 4
 
-		contentLength = int16(binary.BigEndian.Uint16(requestBytes[offset : offset+2]))
-		offset += 2
+	contentLength = int16(binary.BigEndian.Uint16(requestBytes[requestOffset : requestOffset+2]))
+	requestOffset += 2
 
-		content = string(requestBytes[offset : offset+int(contentLength)])
-		offset += int(contentLength)
+	content = string(requestBytes[requestOffset : requestOffset+int(contentLength)])
+	requestOffset += int(contentLength)
+	requestOffset++
 
-		arrayLength = int(requestBytes[offset+1])
-		offset += 2
-
-		topicLength = int(requestBytes[offset])
-		offset++
-
-		topicName = string(requestBytes[offset : offset+topicLength-1])
-		offset += topicLength - 1
-	}
+	topicArrayLength = int(requestBytes[requestOffset])
+	requestOffset++
 
 	return
 }
@@ -104,12 +95,6 @@ func main() {
 		fmt.Println("Failed to bind to port 9092")
 		os.Exit(1)
 	}
-
-	// conn, err := l.Accept()
-	// if err != nil {
-	// 	fmt.Println("Error accepting connection: ", err.Error())
-	// }
-	// defer conn.Close()
 
 	for {
 		conn, err := l.Accept()
@@ -140,11 +125,11 @@ func main() {
 
 				fmt.Printf("Received: %s\n", string(buffer[:n]))
 
-				// Parse the Kafka request
-				correlationID, apiVersion, contentLength, content, arrayLength, topicLength, topicName := parseKafkaRequest(buffer[:n])
+				// Parse the Queue request
+				correlationID, apiVersion, contentLength, content, topicArrayLength, requestOffset := parseQueueRequest(buffer[:n])
 
 				// Build the response
-				responseBytes := buildApiVersionsResponse(correlationID, apiVersion, arrayLength, contentLength, content, topicLength, topicName)
+				responseBytes := buildResponse(buffer[:n], requestOffset, correlationID, apiVersion, topicArrayLength, contentLength, content)
 
 				// Debug output
 				fmt.Printf("  message_size: %d bytes\n", len(responseBytes)-4)
@@ -153,7 +138,6 @@ func main() {
 				fmt.Printf("  Total response: %v (hex: %x)\n", responseBytes, responseBytes)
 
 				// Send response
-				// _, err = c.Write(responseBytes)
 				_, err = c.Write(responseBytes)
 				if err != nil {
 					fmt.Println("Error writing response:", err.Error())
