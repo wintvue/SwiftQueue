@@ -1,66 +1,55 @@
+// Package main implements a SwiftQueue protocol server that handles basic SwiftQueue API requests.
+// This server supports the following SwiftQueue APIs:
+//   - ApiVersions (API Key 18): Returns the list of supported API versions
+//   - DescribeTopicPartitions (API Key 1): Returns metadata about topics
+//   - DescribeCluster (API Key 75): Returns cluster metadata
+//
+// The server is designed with production-grade patterns including:
+//   - Graceful shutdown on SIGINT/SIGTERM
+//   - Concurrent connection handling with proper lifecycle management
+//   - Structured logging with contextual information
+//   - Configuration management with validation
+//   - Proper error handling throughout the request/response cycle
+//   - Timeout handling for network operations
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
-	"net"
+	"log"
 	"os"
 )
 
-// Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
-var _ = net.Listen
-var _ = os.Exit
-
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+	// Load configuration
+	var config *Config
+	var err error
 
-	
-	l, err := net.Listen("tcp", "0.0.0.0:9092")
-	if err != nil {
-		fmt.Println("Failed to bind to port 9092")
-		os.Exit(1)
-	}
-	for {
-		conn, err := l.Accept()
+	// Check if a config file was provided as a command-line argument
+	if len(os.Args) > 1 {
+		configFile := os.Args[1]
+		fmt.Printf("Loading configuration from: %s\n", configFile)
+		config, err = LoadConfigFromFile(configFile)
 		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			continue
+			log.Fatalf("Failed to load config file: %v", err)
 		}
-
-		// Handle each connection in a goroutine for concurrent connections
-		go func(c net.Conn) {
-			defer c.Close()
-			fmt.Println("Client connected!")
-
-			// Read data from the client
-			buffer := make([]byte, 1024)
-			n, err := c.Read(buffer)
-			if err != nil {
-				fmt.Println("Error reading from connection:", err.Error())
-				return
-			}
-
-			// Print what we received
-			fmt.Printf("Received: %s\n", string(buffer[:n]))
-
-			responseValue := int32(7) // 32-bit signed integer
-			responseBytes := make([]byte, 4)
-			binary.BigEndian.PutUint32(responseBytes, uint32(responseValue))
-			
-
-			fmt.Printf("Sending bytes: %v (hex: %x)\n", responseBytes, responseBytes)
-			
-			_, err = c.Write(responseBytes)
-
-			if err != nil {
-				fmt.Println("Error writing response:", err.Error())
-				return
-			}
-
-			fmt.Printf("Response sent: %d\n", responseValue)
-			fmt.Println("Response sent to client!")
-		}(conn)
+	} else {
+		// Use default configuration
+		fmt.Println("No config file provided, using default configuration")
+		config = DefaultConfig()
 	}
-	
+
+	// Create server instance
+	server, err := NewServer(config)
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Run the server (blocks until shutdown)
+	fmt.Println("Starting SwiftQueue protocol server...")
+	if err := server.Run(); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
+
+	fmt.Println("Server shutdown complete")
+	os.Exit(0)
 }
